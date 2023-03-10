@@ -22,7 +22,7 @@ public enum Box {
         return Box.values()[this.ordinal() + 1];
     }
 
-    int getNumber(){
+    public int getNumber(){
         return this.ordinal();
     }
 }

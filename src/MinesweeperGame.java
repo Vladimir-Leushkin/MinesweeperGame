@@ -3,8 +3,11 @@ import java.awt.*;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Random;
+
+import static javax.swing.JOptionPane.showMessageDialog;
 
 public class MinesweeperGame extends JFrame {
 
@@ -12,14 +15,11 @@ public class MinesweeperGame extends JFrame {
     private JLabel label;
     private final int COLS = 9;
     private final int ROWS = 9;
-    private final int BOMBS = 10;
     private final int IMAGE_SIZE = 50;
-    private Cell[][] gameField = new Cell[COLS][ROWS];
+    private final Cell[][] gameField = new Cell[COLS][ROWS];
     private static ArrayList<Cell> allCells;
     private int countMinesOnField;
-    private static Random random = new Random();
-    private static final String MINE = "\uD83D\uDCA3";
-    private static final String FLAG = "\uD83D\uDEA9";
+    private static final Random random = new Random();
     private int countFlags = 0;
     private boolean isGameStopped;
     private int countClosedTiles = COLS * ROWS;
@@ -57,17 +57,12 @@ public class MinesweeperGame extends JFrame {
             public void mousePressed(MouseEvent e) {
                 int x = e.getX() / IMAGE_SIZE;
                 int y = e.getY() / IMAGE_SIZE;
-                //Coord coord = new Coord(x, y);
                 if (e.getButton() == MouseEvent.BUTTON1){
-                    //game.pressLeftButton(coord);
+                    onMouseLeftClick(x, y);
                 }
                 if (e.getButton() == MouseEvent.BUTTON3){
-                    //game.pressRightButton(coord);
+                    onMouseRightClick(x, y);
                 }
-                if (e.getButton() == MouseEvent.BUTTON2){
-                    //game.start();
-                }
-                //label.setText(getMessage());
                 panel.repaint();
             }
         });
@@ -97,32 +92,24 @@ public class MinesweeperGame extends JFrame {
         return icon.getImage();
     }
 
-    private ArrayList<Cell> setAllCells(){
+    private ArrayList<Cell> getAllCells(){
         allCells = new ArrayList<>();
         for (int y = 0; y < ROWS; y++) {
-            for (int x = 0; x < COLS; x++) {
-                allCells.add(gameField[y][x]);
-            }
+            allCells.addAll(Arrays.asList(gameField[y]).subList(0, COLS));
         }
         return allCells;
     }
 
     private void createGame() {
-        boolean isMine = false;
         for (int y = 0; y < ROWS; y++) {
             for (int x = 0; x < COLS; x++) {
-                if (countMinesOnField <= BOMBS){
-                    isMine = random.nextBoolean();
-                }
-                if (isMine) {
-                    countMinesOnField++;
-                }
-                gameField[y][x] = new Cell(x, y, isMine, Box.CLOSED);
+                gameField[y][x] = new Cell(x, y, false, Box.CLOSED);
             }
         }
+        setBomb();
         countMineNeighbors();
         countFlags = countMinesOnField;
-        setAllCells();
+        getAllCells();
     }
 
     private List<Cell> getNeighbors(Cell cell) {
@@ -152,6 +139,119 @@ public class MinesweeperGame extends JFrame {
                         if(o.isMine){
                             gameField[y][x].countMineNeighbors++;
                         }
+                    }
+                }
+            }
+        }
+    }
+
+    private void openTile(int x, int y){
+        if(gameField[y][x].isOpen || gameField[y][x].isFlag || isGameStopped){
+            return;
+        }
+        gameField[y][x].isOpen = true;
+        countClosedTiles--;
+        if(!gameField[y][x].isMine && gameField[y][x].countMineNeighbors == 0){
+            gameField[y][x].box = Box.ZERO;
+            score += 5;
+            label.setText(getMessage("Think twice! Score:" + score));
+            for(Cell o : getNeighbors(gameField[y][x])){
+                if(!o.isOpen){
+                    openTile(o.x, o.y);
+                }
+            }
+        }else if(gameField[y][x].isMine){
+            gameField[y][x].box = Box.BOMBED;
+            gameOver();
+        }else{
+            gameField[y][x].box = Box.values()[gameField[y][x].countMineNeighbors];
+            score += 5;
+            label.setText(getMessage("Think twice! Score:" + score));
+        }
+        if(countClosedTiles == countMinesOnField && !gameField[y][x].isMine){
+            win();
+        }
+    }
+
+    private void markTile(int x, int y){
+        if(isGameStopped){
+            return;
+        }else if(gameField[y][x].isOpen){
+            return;
+        }else if(!gameField[y][x].isFlag && countFlags == 0){
+            return;
+        }else if(!gameField[y][x].isFlag){
+            gameField[y][x].isFlag = true;
+            gameField[y][x].box = Box.FLAGED;
+            countFlags--;
+        }else if(gameField[y][x].isFlag){
+            gameField[y][x].isFlag = false;
+            gameField[y][x].box = Box.CLOSED;
+            countFlags++;
+        }
+    }
+
+    public void onMouseLeftClick(int x, int y){
+        if(isGameStopped){
+            restart();
+            return;
+        }
+        openTile(x, y);
+
+    }
+
+    public void onMouseRightClick(int x, int y){
+
+        markTile(x, y);
+    }
+
+    private void gameOver(){
+        isGameStopped = true;
+        showMines();
+        label.setText(getMessage("You lose!  Score:" + score));
+    }
+
+    private void win(){
+        isGameStopped = true;
+        label.setText(getMessage("You win!!!  Score:" + score));
+    }
+
+
+    private void restart(){
+        isGameStopped = false;
+        countClosedTiles = COLS * ROWS;
+        score = 0;
+        countMinesOnField = 0;
+        label.setText(getMessage("Let's play again"));
+        createGame();
+    }
+
+    private void setBomb(){
+        int BOMBS = 10;
+        while (countMinesOnField < BOMBS){
+            Cell cell = getRandomCell();
+            if (gameField[cell.y][cell.x].isMine){
+                continue;
+            }
+            gameField[cell.y][cell.x] = cell;
+            countMinesOnField ++;
+        }
+    }
+
+    private Cell getRandomCell(){
+        return new Cell(random.nextInt(ROWS), random.nextInt(COLS), true, Box.CLOSED);
+    }
+
+    private String getMessage(String s) {
+        return s;
+    }
+
+    private void showMines(){
+        for (Cell cell : getAllCells()){
+            if (cell.isMine){
+                if (!cell.isFlag){
+                    if (Box.BOMBED != cell.box){
+                        gameField[cell.y][cell.x].box = Box.BOMB;
                     }
                 }
             }
